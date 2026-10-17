@@ -1,0 +1,235 @@
+#remember terraform will not treat seperate .tf files as seperate, it will club all the files
+#so you can refer any resource or any variable in any .tf files without having to specify the file name(.tf) of the referring resource
+#example : you are inside variables.tf
+        variable "vpc_id" {
+            default : main.aws_vpc.my_vpc.id #here you need to refer main.tf to get vpc id of my vpc
+            default : aws_vpc.my_vpc.id  #you can write like this
+        }
+#the seperation of .tf files is just for our reference and organising code
+
+1. What is a .tfvars file?
+
+A .tfvars file is used to assign values to Terraform input variables.
+
+Imagine you are creating EC2 instances for three environments:
+- Development: t3.micro
+- Testing: t3.small
+- Production: t3.medium
+You want to use the same Terraform code for all three environments without repeatedly editing main.tf.
+A .tfvars file lets you change the values separately from the infrastructure code(.tf code).
+
+variables.tf
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+}
+variable "ami_id" {
+    default = "some ami id"
+    type = string
+}
+
+#it need not be in variables.tf a seperate file, it can be inside your main.tf configuration file also
+
+main.tf
+resource "aws_instance" "web" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+}
+
+terraform.tfvars
+instance_type = "t3.small"
+ami_id        = "ami-0123456789abcdef0"
+
+#remember here the things inside your .tfvars file will refer the variables inside .tf files and will override the default values of variables if written
+#so the key inside .tfvars should be same as variable name
+
+this will override the .tf variables value and change existing instance type to t3.small with ami-0123456789abcdef0
+this happens without editing you .tf file
+
+will this not cause drift, becuase your .tf file is referring some default value inside varaibles.tf and in the console there is different value
+answer : How Terraform Resolves This:
+The Default Fallback (variables.tf):
+If no other value is provided in main.tf(no hardcoded value to resources inside main.tf), Terraform would fall back to the default values inside variables (t2.micro and "some ami id").
+The Override (terraform.tfvars):
+However, Terraform automatically looks for a terraform.tfvars file in your root folder. Values inside terraform.tfvars override the default values in variables.tf.
+
+
+# How Terraform loads .tfvars
+
+terraform-ec2/
+├── main.tf
+├── variables.tf
+└── terraform.tfvars
+
+When you run:
+terraform init
+terraform plan
+
+
+**Terraform automatically loads the file named terraform.tfvars from the working directory.**
+
+Different types of .tfvars files
+Not every .tfvars file is automatically loaded.
+
+
+Filename	         Automatically loaded?	How to use it
+terraform.tfvars	    Yes	                Run terraform plan
+terraform.tfvars.json	Yes	                Run terraform plan
+dev.auto.tfvars	        Yes	                Run terraform plan
+prod.auto.tfvars	    Yes	                Run terraform plan
+dev.tfvars	            No	                Use -var-file="dev.tfvars"
+prod.tfvars	            No	                Use -var-file="prod.tfvars"
+
+Example: custom filename
+ Create dev.tfvars:
+ instance_type = "t3.micro"
+ ami_id        = "ami-0123456789abcdef0"
+
+If you run only terraform plan, Terraform will not automatically load dev.tfvars.
+Run:
+terraform plan -var-file="dev.tfvars"
+
+Example: .auto.tfvars
+Create dev.auto.tfvars:
+
+instance_type = "t3.micro"
+ami_id        = "ami-0123456789abcdef0"
+
+Now this command automatically loads the file:
+terraform plan
+------------------
+Use .tfvars for multiple environments
+This is one of the most important practical uses.
+Suppose you are managing the same application in development, testing, and production.
+You can maintain one Terraform configuration and different variable files.
+Project structure
+terraform-ec2/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── dev.tfvars
+├── test.tfvars
+└── prod.tfvars
+
+why do we need multiple .tfvars like test,dev,prod; when we have only one main.tf?
+
+it is helpful when you work in terraform workspaces
+you will have only one main.tf file, but you will have seperate state file for each environments
+
+terraform plan -var-file="dev.tfvars"
+terraform apply -var-file="dev.tfvars"
+
+terraform plan -var-file="test.tfvars"
+terraform apply -var-file="test.tfvars"
+
+terraform plan -var-file="prod.tfvars"
+terraform apply -var-file="prod.tfvars"
+--------------------------------------
+Can .tfvars contain lists, maps, objects, and other types?
+Yes. The values must match the variable's declared type.
+inside your .tfvars file, you can declare as below
+String
+region = "ap-south-1"
+
+
+Number
+volume_size = 30
+
+
+Boolean
+enable_monitoring = true
+
+----------------------
+List
+allowed_ports = [22, 80, 443]
+
+
+Variable declaration:inside .tf file
+
+variable "allowed_ports" {
+  type = list(number)
+}
+-----------------
+
+Map : inside .tfvars file
+instance_types = {
+  dev  = "t3.micro"
+  test = "t3.small"
+  prod = "t3.medium"
+}
+
+
+Variable declaration: inside .tf file
+variable "instance_types" {
+  type = map(string)
+}
+-----------------
+
+Object : inside .tfvars file
+server = {
+  name          = "web-server"
+  instance_type = "t3.micro"
+  monitoring    = true
+}
+
+
+Variable declaration: inside .tf file
+variable "server" {
+  type = object({
+    name          = string
+    instance_type = string
+    monitoring    = bool
+  })
+}
+
+-----------------
+This lets you group related settings into one structured input.
+
+What if a required variable has no default?
+Consider:
+variable "instance_type" {
+  type = string
+}   
+There is no default. Terraform expects a value from another source.
+You can supply one in terraform.tfvars:
+
+
+
+
+
+
+
+
+
+Should you store passwords in .tfvars?
+Avoid committing passwords, access keys, or tokens in .tfvars files tracked by Git.
+For example, don't commit a file containing an actual database password.
+You can mark a variable as sensitive:
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+
+But sensitive = true primarily controls display. It does not, by itself, encrypt the value or remove it from Terraform state. Protect the state backend and use a secret manager or protected CI/CD variables where appropriate.
+Also, AWS credentials should normally be configured through the AWS CLI profile, environment, or an appropriate IAM role—not hardcoded into Terraform variables.
+
+variables will accept the values from .tfvars, environment variables, terrafom apply -var-var_name1=value etc
+
+so when you want to pass sensitive information to terraform variables and you dont want that to be hardcoded then you can pass that values using cli commands
+such as 
+
+1)terraform apply -var="var_name1=value1" -var="var_name2=value2" etc
+
+terraform apply -var="env=test" -var="channel_name=mycompanychannel" 
+
+#to pass multiple values, here each variable is seperated by space and each variable starts with -var= and keyandvalue will be enclosed inside one double quote
+
+2)To pass values to your Terraform variables using environment variables, Terraform uses a specific naming convention: TF_VAR_ followed by the exact name of your variable.
+
+The Naming Rule
+If you have a variable named env in your .tf code, the environment variable you must create on your computer must be named TF_VAR_env.
+
+inwindows:
+$env:TF_VAR_env = "test"
+$env:TF_VAR_channel_name = "mycustomchannel"

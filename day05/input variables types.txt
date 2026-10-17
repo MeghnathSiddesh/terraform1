@@ -1,5 +1,7 @@
 Data Types for Input Variables
 
+Declares variable names, types, defaults, and validation rules.
+
 When you define an input variable, you can enforce what kind of data it accepts using the type argument. Terraform supports both primitive and complex data types.
 
 A. Primitive Types (Simple values)
