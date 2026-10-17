@@ -1,0 +1,96 @@
+In Terraform, locals let you define reusable values or expressions inside your .tf configuration. You can calculate a value once and reference it in multiple places without repeating the same expression.
+
+Think of locals like variables inside a function in Python, except Terraform locals are declared in a locals block and referenced using local.name.
+
+locals {
+  environment = "dev"
+  project     = "SwiftBite"
+  managed_by  = "Terraform"
+  disk_size = 20
+  encrypt = true
+}
+
+You declare locals inside a locals block. You can define multiple local values in one block.
+Now reference them using local.<name>:
+
+resource "aws_instance" "web" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  tags = {
+    Environment = local.environment
+    Project     = local.project
+    ManagedBy   = local.managed_by
+  }
+}
+
+Notice the difference:
+- var.environment refers to an input variable.
+- local.environment refers to a local value.
+
+You can also use multiple locals blocks across your configuration files. Terraform combines them as part of the same module.
+
+Suppose you want to create resource names dynamically based on an environment and project.
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+variable "project" {
+  type    = string
+  default = "swiftbite"
+}
+
+locals {
+  resource_prefix = "${var.project}-${var.environment}"
+  bucket_name     = "${local.resource_prefix}-assets"
+  server_name     = "${local.resource_prefix}-web"  #use ${} when you are referring values inside a string
+}
+
+local.resource_prefix	swiftbite-dev
+local.bucket_name	swiftbite-dev-assets
+local.server_name	swiftbite-dev-web
+
+
+locals values cannot be overridden via -var or env variables or command line directly
+
+For example:
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+locals {
+  resource_prefix = "swiftbite-${var.environment}"
+}
+
+You can override the input variable:
+terraform plan -var="environment=prod"
+Terraform then evaluates local.resource_prefix as swiftbite-prod.
+
+you dont need to define values type in locals, it will take type dynamically
+
+locals can evaluate all types of data inside terraform
+
+locals {
+  availability_zones = [
+    "ap-south-1a",
+    "ap-south-1b"
+  ]
+
+  instance_types = {
+    dev  = "t2.micro"
+    prod = "t3.medium"
+  }
+
+  server_config = {
+    name          = "web"
+    instance_type = "t3.small"
+    volume_size   = 20
+  }
+}
+Access them like this:
+local.availability_zones[0]
+local.instance_types["prod"]
+local.server_config.volume_size

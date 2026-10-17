@@ -1,0 +1,25 @@
+In Terraform, a validation condition is a guardrail you can add to input variables to ensure that anyone using your code (including yourself) passes valid, acceptable values before Terraform even attempts to run.
+
+How It Works
+A validation block is placed inside a variable block. It takes two main arguments:
+
+condition: An expression that must evaluate to either true or false. If it evaluates to false, Terraform stops and throws an error.
+
+error_message: A clear, helpful message explaining why the validation failed and what the acceptable values are.
+
+Imagine you want to ensure that anyone using your env variable can only pass dev, staging, or prod, and nothing else (like a typo like development or test).
+
+variable "env" {
+  type    = string
+  default = "dev" #you can also not define value apart from condtion values in default section as well
+
+  # Validation block
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.env)
+    error_message = "The 'env' variable must be one of: 'dev', 'staging', or 'prod'."
+  }
+}
+
+If someone sets env = "test" and runs terraform plan, Terraform will immediately abort and output an error message 
+
+Restricting Instance Sizes: Ensuring someone doesn't accidentally pass an expensive EC2 instance type like p4de.24xlarge when they are only allowed to use t2.micro or t3.micro.

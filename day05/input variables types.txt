@@ -1,0 +1,218 @@
+Data Types for Input Variables
+
+When you define an input variable, you can enforce what kind of data it accepts using the type argument. Terraform supports both primitive and complex data types.
+
+A. Primitive Types (Simple values)
+string: A sequence of characters.
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+}
+
+
+number: A numeric value (integer or float).
+
+variable "timeout" {
+  type    = number
+  default = 30
+}
+
+bool: A boolean value (true or false).
+
+variable "enable_logging" {
+  type    = bool
+  default = true
+}
+
+B. Complex Types (Collections and structures)
+
+1)list(...): An ordered sequence of values of the same type, accessed by index (e.g., ["us-east-1a", "us-east-1b"]).
+
+variable "subnet_cidrs" {
+  type    = list(string) #list(type)
+  default = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+Access an element using var.subnet_cidrs[0].
+
+2)map(...): A collection of key-value pairs, where all keys are strings and all values share the same type.
+multiple values identified by keys
+
+
+variable "instance_types" {
+  type = map(string)
+
+  default = {
+    dev  = "t2.micro"
+    test = "t3.small"
+    prod = "t3.medium"
+  }
+}
+Access the production value using 
+var.instance_types["dev"]   # t2.micro
+var.instance_types["test"]  # t3.small
+var.instance_types["prod"]  # t3.medium
+
+in map, all the values should be of same type
+so it is not used to group related configuration settings.
+
+3)object({...}): A complex structure containing specific attributes with their own distinct data types. 
+An object stores related attributes, and each attribute has a defined name and type.
+
+**Perfect for grouping related configuration settings.**
+
+variable "server_config" {
+  type = object({
+    name          = string
+    instance_type = string
+    volume_size   = number
+    monitoring    = bool
+  })
+
+  default = {
+    name          = "web-server"
+    instance_type = "t3.small"
+    volume_size   = 20
+    monitoring    = true
+  }
+}
+
+The type declaration defines the expected structure:
+
+Access attributes with expressions such as 
+var.server_config.name
+var.server_config.instance_type
+var.server_config.volume_size
+var.server_config.monitoring
+
+4)tuple([...]): A fixed-length list where each element can have a different, explicitly defined data type (e.g., tuple([string, number, bool])).
+variable "server_details" {
+  type    = tuple([string, number, bool])
+  default = ["web-server", 20, true]
+}
+5)set(...): Similar to a list, but contains unique, unordered values (no duplicates allowed).
+variable "allowed_ports" {
+  type    = set(number)
+  default = [80, 443, 8080, 443]
+}
+tuple and set are waste
+
+
+
+
+
+
+
+List of objects
+
+variable "servers" {
+  type = list(object({
+    name          = string
+    instance_type = string
+    volume_size   = number
+  }))
+
+  default = [
+    {
+      name          = "web"
+      instance_type = "t2.micro"
+      volume_size   = 20
+    },
+    {
+      name          = "app"
+      instance_type = "t3.small"
+      volume_size   = 30
+    },
+    {
+      name          = "worker"
+      instance_type = "t3.medium"
+      volume_size   = 50
+    }
+  ]
+}
+
+here each list element will be an object and are seperated by coma 
+here each object will have same keys but values mauy change
+
+Access individual values
+var.servers[0].name
+# web
+
+var.servers[1].instance_type
+# t3.small
+
+var.servers[2].volume_size
+# 50
+
+
+variable "servers" {
+  type=map(object({
+     instance_type = string
+    volume_size   = number
+  }))
+  #here each key in map is of object type
+  default = {
+     web = {
+      instance_type = "t2.micro"
+      volume_size   = 20
+    }
+
+    app = {
+      instance_type = "t3.small"
+      volume_size   = 30
+    }
+
+    worker = {
+      instance_type = "t3.medium"
+      volume_size   = 50
+    }
+  }
+}
+
+var.servers["web"].instance_type
+# t2.micro
+
+var.servers["app"].volume_size
+# 30
+
+var.servers["worker"].instance_type
+# t3.medium
+
+-------------------------------
+
+any type
+Normally, when declaring a variable, you specify its expected type, such as string, number, bool, or list(string).
+But sometimes, you don't know beforehand what type of value will be passed. That's where any comes in.
+variable "data" {
+  type = any
+}
+
+You could provide:
+
+data = "hello"
+data = 100
+data = ["dev", "test", "prod"]
+data = {
+  name = "web-server"
+  port = 8080
+}
+
+Practical example
+variables.tf
+
+variable "config" {
+  type = any
+}
+
+terraform.tfvars
+
+config = {
+  instance_type = "t2.micro"
+  volume_size   = 20
+}
+
+main.tf
+
+output "instance_config" {
+  value = var.config
+}

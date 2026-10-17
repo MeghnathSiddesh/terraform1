@@ -1,0 +1,9 @@
+Terraform Variable Precedence — Explained with Examples
+
+Terraform allows you to provide the same input variable from different places. If multiple sources provide a value for the same variable, Terraform uses the value from the source with the highest precedence.
+
+For common variable sources, Terraform's precedence from lower to higher is:
+1. Variable default.
+2. TF_VAR_ environment variable.
+3. Automatically loaded terraform.tfvars and *.auto.tfvars files, with file ordering rules.
+4. Explicit -var and -var-file command-line arguments, with ordering rules.

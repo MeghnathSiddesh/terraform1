@@ -1,0 +1,4 @@
+An important thing to know about Terraform is that it doesn't actually care what you name your .tf files (you could technically put everything into one massive main.tf file). When you run commands, Terraform automatically reads all .tf files in the folder together as if they were a single document.
+
+
+

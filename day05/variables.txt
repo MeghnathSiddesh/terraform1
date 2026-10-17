@@ -1,0 +1,89 @@
+why do we need variable?
+when we need to use a value again and again in a program or script, you need to define everytime, so if you use variables
+you define it once and use it everytime
+without variable, if you use that value in multiple places,if you want to edit that value you need to edit the value in all the places
+
+input variables act as parameters or arguments for your infrastructure code. They allow you to make your configurations flexible, reusable, and dynamic, so you don't have to hardcode values directly into your resource blocks.
+
+Categories of Variables in Terraform
+---------------------------------------
+Terraform uses three main constructs to handle data and values:
+----------------------------------------
+1) Input Variables (variable)
+
+Act as parameters or inputs for your .tf configuration, allowing you to pass customizable values from the outside (via terraform.tfvars, command line, or environment variables). 
+you can also define input variables inside your main configuration file as well
+
+variable "instance_type" {
+  description = "EC2 instance type"(optional)
+  type        = string
+  default     = "t2.micro"
+}
+
+Attribute	                  Meaning
+variable "instance_type"	Declares a variable named instance_type.
+description	                Explains the purpose of the variable.
+type = string	            The value must be a string.
+default	                    The value Terraform uses if you don't supply another value.
+
+
+in this only instance type should be included
+each variables block refers single variable of one kind of value, if you want to declare multiple attributes of resource then declare them as seperate variables
+ex: 
+
+variable "ec2_instance_type" {
+  type    = string
+  default = "t2.micro"
+}
+
+variable "vpc_id" {
+  type = string
+  default = give a vpc id
+}
+
+variable "ami_id" {
+  type = string
+  default = give a ami id
+}
+
+How to use these variables in an EC2 resource
+resource "aws_instance" "vpc1" {
+  ami           = var.ami_id
+  instance_type = var.ec2_instance_type
+  subnet_id     = var.subnet_id
+
+  tags = {
+    Name = "my-ec2-instance"
+  }
+}
+
+=============
+
+4. Four ways to provide input variable values
+Method 1: Using a default value
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+}
+this type, you will write this variable inside your configuration file and access this variable using var.instance_type
+What happens if you don't specify a default?
+like :>  variable "instance_type" {
+  type = string
+}
+There is no default value.
+when you run plan or apply terraform may prompt you to enter the value:
+var.instance_type
+  Enter a value:
+
+Method 2: Using a .tfvars file
+
+Create a file named terraform.tfvars:
+instance_type = "t3.small"
+server_name   = "test-server"
+
+you will access this variables in you configuration files
+Terraform automatically loads a file named terraform.tfvars in the root module directory.
+The .tfvars file supplies values; variables.tf declares the variables.
+
+
+

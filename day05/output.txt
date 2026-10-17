@@ -1,0 +1,43 @@
+In Terraform, output is used to display important information about the infrastructure after Terraform creates or updates it. You can also use outputs to expose values from one Terraform module to another.
+
+For example, after creating an EC2 instance, you might want to see its public IP address, instance ID, or public DNS name without opening the AWS Console.
+
+resource "aws_instance" "web" {
+  ami           = "ami-0123456789abcdef0"
+  instance_type = "t2.micro"
+}
+
+output "instance_id" {
+  value       = aws_instance.web.id
+}
+when you apply terraform apply, you will see the output in cli
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+instance_id = "i-0123456789abcdef0"
+
+Can output be used with variables and locals?
+Yes. Outputs can expose values from resources, input variables, and local values.
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+locals {
+  app_name = "swiftbite"
+}
+
+output "environment_name" {
+  value = var.environment
+}
+
+output "application_name" {
+  value = local.app_name
+}
+
+output "instance_type" {
+  value = aws_instance.web.instance_type
+}
