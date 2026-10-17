@@ -1,0 +1,78 @@
+# Terraform S3 Remote Backend and State Locking
+
+# When you work with Terraform locally, Terraform usually stores its state in a file named terraform.tfstate on your computer.
+# But you're managing AWS infrastructure for a company, and five engineers need to work on the same Terraform project.
+
+problems arise:
+1. Shared state: How can everyone access the same Terraform state?
+2. Concurrent modifications: What happens if two engineers run terraform apply at the same time?
+
+Terraform's S3 remote backend and state locking help solve these problems.
+
+A remote backend stores Terraform's state. It does not store your .tf files. Your code .tf configuration can be in GitHub while the state is stored in S3.
+
+We'll use:
+Block all public access.
+Enable server-side encryption.
+- An S3 bucket to store Terraform state.
+- S3 native state locking to prevent concurrent Terraform operations.
+- S3 versioning to recover previous state versions.
+- IAM permissions to restrict access.
+
+The AWS identity you use to run Terraform needs the relevant S3 permissions.s3:ListBucket,s3:GetObject, s3:PutObject,s3:GetObject, s3:PutObject, s3:DeleteObject
+
+For an S3 backend, Terraform stores the state as an S3 object inside a bucket. You specify the bucket name, the object key (path), and the AWS Region
+The key identifies the state object, not an AWS resource ID.
+
+terraform {
+  backend "s3" {
+    bucket       = "meghnath-terraform-state-prod"
+    key          = "production/network/terraform.tfstate"
+    region       = "ap-south-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
+
+do not make this s3 created through terraform, create it manually
+
+Setting	Meaning
+backend "s3"	Use Amazon S3 for state storage
+bucket	Name of the existing S3 bucket
+key	Path/name of the state object in the bucket
+region	AWS Region where the bucket exists
+encrypt	Enable server-side encryption for the state object
+use_lockfile	Enable S3-native state locking
+
+The example uses S3-native locking, supported by Terraform 1.10 and later. The backend bucket must already exist; Terraform doesn't create the backend bucket automatically just because you declare it in this block.
+
+DynamoDB-based locking is deprecated in the S3 backend documentation; the recommended modern approach is S3-native locking with use_lockfile = true.
+
+terraform init
+
+
+Terraform initializes the S3 backend and connects to the configured state storage. If you are migrating from local state, Terraform can migrate the existing state to S3 when prompted.
+
+State locking prevents multiple Terraform operations from modifying the same state simultaneously when the backend supports locking.
+
+
+
+locking
+You run terraform apply. Terraform attempts to acquire the lock by creating lock for this state.
+Terraform creates the lock object and successfully acquires the lock, it can proceed with the operation that needs state protection.
+Your teammate runs terraform apply. Their Terraform process attempts to acquire the same lock.Terraform reports that the state is locked and stops rather than allowing a competing state update.
+Your operation finishes. Terraform releases the lock, normally by deleting the .tflock object.
+Your teammate can retry. If the lock is now free, their process can create new .tflock and acquire it and proceed.
+
+With S3 conditional writes, the process is streamlined natively within S3:
+1. The Request: When you run a command like terraform apply, Terraform sends a PutObject request to create a lock file (e.g., a .tflock file next to your state file).
+2. The Condition: Terraform passes an HTTP header called If-None-Match: * along with the request. This instructs S3: "Only create this file if it does not already exist."
+3. The Outcome:
+	• If no lock file exists: S3 successfully creates the file and returns a 200 OK response. Terraform acquires the lock and safely proceeds with your deployment.
+	• If a lock file already exists: S3 rejects the upload and returns a 412 Precondition Failed error. Terraform catches this "bounced" write, realizes someone else is currently running an operation, and safely halts to prevent state corruption.
+
+
+
+once the remote backend is setup and you perfom terraform init, plan, apply
+your state file will be stored and updated and pulled from remote backend
+but you will still see a terraform state file in your local directory, it will just have information about remote backend and its hashing not about your terraform resources and all

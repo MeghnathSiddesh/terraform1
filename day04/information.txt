@@ -1,0 +1,136 @@
+# desired state : This is what you want your infrastructure to look like.
+
+# actual state: This is what currently exists in your cloud environment (like AWS, Azure, or GCP).
+
+# terraform always tries to DESIRED STATE == ACTUAL STATE
+
+# terraform plan
+# Terraform performs an implicit refresh as part of preparing the plan. The key is that the refreshed information is used to calculate the plan, but the refreshed state is not committed to the persistent state file just because you ran terraform plan.
+# here in implicit refresh it will compare the current .tf file with AWS infra via AWS provider and prepare the plan
+# if there is drfit observed, it will not write it into statefile directly in disk(this is called in memory refresh)
+
+# terraform apply
+# it will also do implicit refresh with aws API and .tf file if not done via terraform plan
+# once you view the plan and typed yes, it will execute the plan and it will commit the state file to desired state which is whatever it is created via apply
+# if you apply a previously saved plan, Terraform applies(terraform apply) that plan rather than generating a completely new plan from scratch.
+
+
+# What if you want to update only the state file a/c to the current infra in aws, without changing AWS?
+# terraform plan -refresh-only
+# this will also detect drift; it compares your .tf configuration file with AWS infra and it will not be updated in state file and .tf file
+# it will just detect the drift and you can automate to report the drift
+# This command checks AWS and shows you the proposed state changes. It does not save those changes by itself.(in memory refresh)
+# If you want to save the refreshed state without changing the actual infrastructure, run:
+# terraform apply -refresh-only
+# Terraform shows the proposed state updates and asks for approval. After you confirm, it saves the updated state without attempting to modify the AWS resources.
+# terraform will +,-,~ of resources whatever it is planned
+# For example, suppose you intentionally changed an EC2 instance from t3.micro to t3.large through the AWS Console and want Terraform to record that change (in state file not in your .tf file)rather than reverse it.
+
+
+# so state file will just keep the record of what resources are created via terraform and their confirguration, this is how terraform detects if that particular resource is managed by terraform or not
+# state file will have complete detailing of the resouce it provisioned like name, ARN, resource it attached to , resources it holds,also the name written inside .tf file which the resource will be tracked inside terraform file(ex: demo_bucket in day03) everything will be tracked in state file
+# so it maps the terraform named resource(ex: demo_bucket in day03) in .tf with terraform named resource in state file everytime we do planning or apply which will be helpful while refresh with aws API to track those resources
+
+# if a resource is provisioned via terraform and if that resource complete details are removed in state file then, even if you do (terraform apply -refresh-only), it will not update the resource that was removed from state file; if that resource is written in .tf file it will provision as fresh resource as + in plan; becuase terraform named resource(ex: demo_bucket in day03) is not found in state file
+
+# every time plan or apply do refresh, the aws provider(plugin) will check the state file and compare only those resources in state file with .tf file and AWS infra; so state file is only used to 
+
+# that is why even though every time you do plan or apply, terraform will refresh with AWS API to detect drift, there are many resources created in a aws account, which resource it will compare with .tf file?, so it will compare those resources only written in .tf state file
+# the resources which is not there in state file and there in .tf file will be created as new resource
+
+
+
+# terraform plan -refresh=false
+# terraform apply -refresh=false
+# this will plan or apply :tells Terraform to skip refreshing existing managed resources from the real infrastructure before calculating its plan.
+# As a result, Terraform may make decisions using outdated information.(in state file)
+
+# .tf files will not have any identify information or attributes about the resource like ARN and other default things, but state file will have
+# so, During a normal terraform plan:
+# 1. Terraform reads your .tf configuration to understand the desired state.
+# 2. It reads the state file to identify the resources it manages and their corresponding AWS IDs.
+# 3. The AWS provider queries AWS to refresh the current attributes of those resources.
+# 4. Terraform compares the desired configuration .tf file with the refreshed information and calculates the required changes.
+
+# sometimes the default attributes of the resource may not be explicitly mentioned in .tf configuration file, but it will be mentioned in state file, if you change those attributes manually, it will not be tracked in planning or apply
+# so you need to define those attributes explicitly in .tf configuration file
+# if some attirbute is changed manually to a resource managed in terraform and that attribute is not mentioned in .tf file then you can replicate that change in value of attribute in state file using terraform apply --refresh-only, without updating it in .tf file
+# this tells that state file is only used to find those resources in aws which terraform manages and statefile will not be used to compare the resource attributes with AWS, only .tf configuration file will be used to compare resource atributes with AWS(ex : bucket versioning)
+# sometimes if there is some attribute value change in state file which is not changed in AWS(manualy reverted the changes)for a resource and that attribute is mentioned in .tf file then that change will not be tracked
+# so only those changes will tracked which are mentiined in .tf file
+
+
+# What is terraform.tfstate.backup?
+# terraform.tfstate.backup is a backup of a previous Terraform state snapshot. When you use Terraform's default local backend
+# Terraform keeps the current state in terraform.tfstate and normally saves the previous state as terraform.tfstate.backup when writing a new state
+# Think of it like saving a previous version of a document before replacing it with an updated version.
+# It acts as a disaster recovery fallback. If something goes wrong during an apply (such as a sudden power outage, a crash, or a corrupted state write), your previous working state isn't permanently lost—it is safely stored in the .backup file.
+# you can recover by:
+# Deleting or moving the corrupted terraform.tfstate file.
+# Renaming terraform.tfstate.backup to terraform.tfstate.
+
+# Without state, Terraform may no longer know which AWS resource IDs belong to your declared terraform resources. It could propose creating duplicate resources or otherwise produce an incorrect plan.
+
+
+# never update/delete the contents of state file manually, becuase your state file may go corrupted and your resources will not get tracked
+# you should only edit or update the state file through terraform commands like plan / apply etc which will not corrupt the file or it will not remove resources from track
+
+# -------------------------------------------------------------------------------------------------------------------------------------------
+
+ terraform state list \
+ 
+ command is used to display a list of all the resources currently tracked in your Terraform state file.
+
+What it does:
+Inventory Check: It queries your state file (terraform.tfstate or your remote S3 backend) and prints out the names and resource types of everything Terraform currently manages for that workspace.
+
+Reads Local/Remote State: It doesn't query AWS or the real world; it only looks at what is recorded in the state file.
+-----------
+terraform state show <resource_name>
+-->terraform state show aws_resource_type.nameofresourceinterraformfile
+ex:terraform state show aws_s3_bucket.bucket
+
+used to display the detailed attributes and current values of a specific resource tracked inside your Terraform state file.
+terraform state show lets you inspect everything Terraform knows about a single resource.
+Shows Real Values: It displays attributes like IDs, ARNs, tags, region settings, and any auto-generated values assigned by the cloud provider.
+it reads exclusively from your state file (local or remote backend like S3) and does not make live calls to AWS.
+
+----------------------
+terraform state rm <resource_name>
+
+command is used to remove a specific resource from Terraform's state file tracking, without actually deleting the real-world infrastructure in the cloud.
+Unlinks Management: It tells Terraform: "Stop keeping track of this resource in the state file."
+Leaves Cloud Resource Intouched: The actual resource (like your S3 bucket or EC2 instance) remains fully running and safe in AWS.
+
+--------------------
+
+terraform state mv <source> <destination>
+
+command is used to move or rename a resource's address within your Terraform state file.
+Updates State Metadata Only: It tells Terraform to change the name or path of a tracked resource inside the state file.
+Does Not Touch Real Infrastructure: It makes zero API calls to AWS. Your actual cloud resources remain completely untouched, running, and safe.
+
+Imagine you have this resource in your code and state file:
+resource "aws_s3_bucket" "old_name" {
+  bucket = "my-bucket-xyz"
+}
+Later, you decide you want to rename it in your .tf file to something cleaner, like aws_s3_bucket.new_name.
+If you just change the name in your code and run terraform plan, Terraform will look at the state file, see aws_s3_bucket.old_name, notice it's "missing" from the code, and assume you want to destroy the old bucket and create a brand new one (- then +). Plan: 1 to add, 0 to change, 1 to destroy.
+To prevent Terraform from destroying your real-world resource, you use terraform state mv:
+Change the name in your .tf file to aws_s3_bucket.new_name.
+terraform state mv aws_s3_bucket.old_name aws_s3_bucket.new_name
+
+terraform state mv aws_s3_bucket.bucket1 aws_s3_bucket.bucket12
+
+Other common uses:
+Moving resources into modules: If you decide to organize your code into a reusable module, you can use terraform state mv to shift a resource into that module's address space without recreating it.
+
+it is taught in modules
+
+--------------------------
+
+terraform state pull
+
+command downloads and outputs the current state from your backend (such as your S3 backend) directly to your terminal screen as raw JSON.
+Reads Remote State Locally: If your state file is stored remotely (like in an S3 bucket), you can't easily open it with a local file editor. This command fetches it and displays the entire contents in your terminal.
+Read-Only: It does not modify anything; it just prints the state data to standard output (stdout).
