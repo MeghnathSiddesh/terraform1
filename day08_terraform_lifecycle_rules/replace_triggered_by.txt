@@ -1,0 +1,38 @@
+replace_triggered_by is an advanced lifecycle meta-argument in Terraform that forces a resource to be destroyed and recreated whenever a specified reference changes, even if the resource's own attributes haven't changed.
+
+Why is this useful?
+Normally, Terraform decides to replace a resource only when an attribute inside that specific resource's block changes (like changing an AMI ID on an EC2 instance).
+
+However, sometimes you want a resource to be rebuilt because of an external dependency or configuration file changing. Without replace_triggered_by, Terraform would see no reason to recreate the resource, leaving it running with stale configurations or scripts.
+
+the resource  will be recreated when the attribute value inside replace_triggered_by changes
+
+Code Example
+Imagine you have an EC2 instance, and you want it to be completely re-provisioned (re-created) from scratch every time your deployment script (bootstrap.sh) changes:
+
+resource "aws_instance" "app_server" {
+  ami           = "ami-123456"
+  instance_type = "t3.micro"
+
+  # Forces re-creation whenever the script hash changes
+  lifecycle {
+    replace_triggered_by = [
+      terraform_data.script_hash
+    ]
+  }
+}
+
+resource "terraform_data" "script_hash" {
+  input = filesha256("bootstrap.sh")
+}
+
+here aws_instance.app_server will be recreated when terraform_data.script_hash changes
+
+How It Works Step-by-Step:
+You modify your bootstrap.sh script.
+
+When you run terraform plan, Terraform recalculates the file hash using filesha256().
+
+Because the hash value inside terraform_data.script_hash changes, Terraform detects that aws_instance.app_server is replace_triggered_by it.
+
+Terraform marks the EC2 instance for replacement (destroying the old one and provisioning a fresh instance with your updated script).

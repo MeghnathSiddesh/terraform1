@@ -9,7 +9,7 @@ create_before_destroy
 
 What it does: Changes the order of operations during an update that forces replacement. Instead of destroying the old resource first and then creating the new one, Terraform creates the new resource first and then destroys the old one.
 
-When a property changes that requires recreation (like updating an AMI ID on an EC2 instance), Terraform destroys the old resource first and then creates the new one. This results in downtime.
+When a property(attribute) changes that requires recreation (like updating an AMI ID on an EC2 instance), Terraform destroys the old resource first and then creates the new one. This results in downtime.
 When to use it: Useful for resources with strict uptime requirements (like load balancers or auto-scaling groups) to prevent downtime during updates.
 
 resource "aws_instance" "web" {

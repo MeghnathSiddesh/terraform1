@@ -1,0 +1,74 @@
+ignore_changes is a lifecycle meta-argument in Terraform that tells Terraform to skip evaluating specific attributes during plan and apply operations when the resource are already created.
+
+By default, if you manually change a resource attribute outside of Terraform (like via the AWS Console or an external script), Terraform will detect the drift and try to revert it back to what is written in your code. Using ignore_changes prevents Terraform from touching those specific fields.
+
+How It Works
+When you define ignore_changes, you pass a list of attribute paths that Terraform should completely disregard after the resource is initially created.
+
+Common Use Cases
+Auto-scaling or External Tags: When tools like Kubernetes, CI/CD pipelines, or other cloud services automatically inject or modify tags on your resources.
+
+Auto-scaling Group Desired Capacity: If an auto-scaling group scales up or down dynamically, you don't want Terraform trying to reset the server count back to the initial static number every time you run apply.
+
+Database Passwords or External Secrets: When passwords or configurations are managed externally (e.g., via AWS Secrets Manager or rotated manually) and you don't want Terraform overwriting them.
+
+Key Points to Remember
+Initial Provisioning Still Applies: Terraform will set the value you define in your code when the resource is created for the very first time. ignore_changes only takes effect on subsequent plans and applies.
+
+Wildcards: You can also use ignore_changes = all , to ignore changes across all attributes of a resource, though this is rarely used (usually reserved for resources that are entirely managed outside of Terraform after initial creation).
+
+1. Ignoring Auto-Scaling Group (ASG) Capacity Changes
+
+When you use an Auto Scaling Group, tools like AWS Auto Scaling policies, Kubernetes cluster autoscalers, or manual adjustments will change the actual capacity (desired_capacity) at runtime. If you don't ignore it, Terraform will try to reset your server count back to your static code value every time you run apply.
+
+resource "aws_autoscaling_group" "web" {
+  desired_capacity     = 2
+  min_size             = 1
+  max_size             = 5
+  launch_template_id   = aws_launch_template.web.id
+  vpc_zone_identifier  = aws_subnet.public[*].id
+
+  lifecycle {
+    ignore_changes = [
+      desired_capacity, # Prevents Terraform from overwriting scaling actions
+    ]
+  }
+}
+
+Ignoring Lambda Function Code Updates (CI/CD Deployments)
+Sometimes infrastructure is managed by Terraform, but application code updates (like AWS Lambda zip files or container images) are deployed separately by a CI/CD pipeline (e.g., GitHub Actions or Jenkins). Using ignore_changes stops Terraform from rolling back your app code to an older version defined in the infrastructure repository.
+
+resource "aws_lambda_function" "api" {
+  function_name = "my_api"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs18.x"
+  filename      = "lambda_placeholder.zip" # Initial placeholder code
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash, # Allows CI/CD pipelines to update code without Terraform fighting it
+    ]
+  }
+}
+
+Ignoring Database Passwords Managed Externally
+If database credentials or master passwords are created once via Terraform (or generated randomly), but then managed and rotated securely through an external secrets manager or changed manually later, you want Terraform to ignore future updates to that field.
+
+resource "aws_db_instance" "mysql" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  db_name              = "appdb"
+  username             = "admin"
+  password             = "InitialSecurePassword123!"
+
+  lifecycle {
+    ignore_changes = [
+      password, # Prevents Terraform from resetting the password on subsequent applies
+    ]
+  }
+}
+

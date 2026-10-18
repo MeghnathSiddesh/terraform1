@@ -1,0 +1,119 @@
+In Terraform, preconditions and postconditions are custom validation rules (introduced in Terraform 1.2) that you can place inside a resource's lifecycle block. They allow you to enforce rules, catch configuration errors early, and verify that your infrastructure actually meets your expectations after it gets deployed.
+
+1. Preconditions (precondition)
+What it does: Evaluates a condition before Terraform creates or updates a resource. If the condition evaluates to false, Terraform aborts the plan/apply and throws your custom error message.
+
+When to use it: To validate assumptions about inputs, data sources, or dependent resources before spending time calling cloud provider APIs.
+
+Example: Ensuring an EC2 instance is only launched if the chosen instance type supports a specific feature
+
+it will ensure environment is production and instance type is anything except t2.micro
+
+resource "aws_instance" "web" {
+  ami           = "ami-0567589d25e06853e"
+  instance_type = "t3.micro"
+
+  lifecycle {
+    precondition {
+      condition     = var.environment == "production" ? var.instance_type != "t2.micro" : true
+      error_message = "T2 micro instances are not allowed in the production environment."
+    }
+  }
+}
+lifecycle: Controls Terraform's resource lifecycle behavior.
+precondition: Defines a requirement that must be satisfied.
+condition: A Boolean expression that must evaluate to true.
+error_message: The message Terraform displays if the condition fails.
+
+
+
+
+
+
+
+2. Postconditions (postcondition)
+In Terraform, postcondition is used to verify whether a resource or data source meets a requirement after Terraform has evaluated(plan) or created(apply) it. If the condition fails, Terraform reports an error and can prevent dependent resources from proceeding.
+
+lifecycle: Controls Terraform's resource lifecycle behavior.
+postcondition: Defines a requirement that must be satisfied.
+condition: A Boolean expression that must evaluate to true.
+error_message: The message Terraform displays if the condition fails.
+self: Refers directly to the resource.
+self. : Refers directly to the resource attributes.
+
+A postcondition is not a rollback mechanism. If an EC2 instance has already been created when its postcondition fails, Terraform generally does not automatically delete that instance just to undo the failed check.
+Terraform reports an error and blocks dependent operations.if it fails, but till then whatever resources it created will not do deleted automatically as rollback
+
+Also, postconditions can be evaluated during planning when the required values are already known. They are not restricted to the end of terraform apply.
+
+Verify an EC2 instance is in a private subnet
+
+resource "aws_instance" "app" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.private.id
+
+  associate_public_ip_address = false
+
+  lifecycle {
+    postcondition {
+      condition     = self.public_ip == ""
+      error_message = "The application server must not have a public IPv4 address."
+    }
+  }
+}
+
+The condition checks the instance's public_ip attribute.
+- If public_ip is an empty string, the condition passes.
+- If a public IPv4 address is assigned, the condition fails.
+
+
+condition     = self.public_ip != "" 
+this condition becomes true only when resource(self) gets public ip
+
+Use a postcondition with a data source
+
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-kernel-*-x86_64"]
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = self.owner_id == "137112412989"
+      error_message = "The selected AMI must be owned by Amazon."
+    }
+  }
+}
+
+
+A failed postcondition blocks dependent resources
+
+Suppose an EC2 instance is created first, and an application resource depends on it.
+
+resource "aws_instance" "app" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro"
+
+  lifecycle {
+    postcondition {
+      condition     = self.instance_type == "t3.micro"
+      error_message = "The application instance must be t3.micro."
+    }
+  }
+}
+
+resource "aws_eip" "app" {
+  domain   = "vpc"
+  instance = aws_instance.app.id
+}
+
+The Elastic IP resource depends on the EC2 instance
+
+Terraform must satisfy the EC2 instance's postcondition before it can proceed with dependent operations.
+If the postcondition fails, Terraform blocks the dependent operation, so the Elastic IP is not allocated through this resource operation. However, the EC2 instance may already exist and require correction or cleanup.
+Notice that the dependency does not need an explicit depends_on here: referencing aws_instance.app.id creates an implicit dependency.

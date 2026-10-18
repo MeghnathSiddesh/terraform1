@@ -1,0 +1,31 @@
+prevent_destroy is a lifecycle meta-argument in Terraform that acts as a safety guardrail to protect critical resources from accidental deletion.
+
+If you set prevent_destroy = true inside a resource's lifecycle block, Terraform will block any terraform plan or terraform apply operation that attempts to destroy or delete that resource.
+
+If you try to run an operation that deletes it (such as running terraform destroy or removing the resource block from your code and running apply), Terraform will abort and return an error.
+
+resource "aws_db_instance" "database" {
+  allocated_storage = 20
+  engine            = "mysql"
+  instance_class    = "db.t3.micro"
+  db_name           = "production_db"
+  username          = "admin"
+  password          = "SuperSecurePassword123!"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+When to Use It
+Production Databases: Preventing accidental termination or wiping of databases (aws_db_instance, aws_rds_cluster).
+
+Persistent Storage: S3 buckets or Elastic File Systems (EFS) containing critical user data or logs.
+
+Core Networking Components: Production VPCs or Transit Gateways that downstream services rely on.
+
+How to Actually Delete a Resource with prevent_destroy
+
+Open your configuration file and manually remove or comment out the prevent_destroy = true line (or delete the lifecycle block entirely).
+
+Run terraform apply (or terraform destroy) to update the state.
