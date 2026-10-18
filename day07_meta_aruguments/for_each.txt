@@ -1,0 +1,156 @@
+variable "server_configs" {
+  type = map(string)
+  default = {
+    web = "ami-0567589d25e06723e"
+    api = "ami-0567589d25e06243e"
+    db  = "ami-0567589d25e06563e"
+  }
+}
+
+resource "aws_instance" "servers" {
+  for_each      = var.server_configs
+  instance_type  = "t2.micro"
+
+  tags = {
+    Name = "Dev-server"
+  }
+}
+
+In Terraform, for_each is a powerful meta-argument used to create multiple instances of a resource or module based on a map or a set of strings.
+
+for_each meta-argument in Terraform accepts only maps or sets.
+
+Unlike count, which identifies instances by their numerical index ([0], [1]), for_each identifies instances by unique keys or values. This makes it the preferred choice for managing infrastructure where stability matters.
+
+Why use for_each instead of count?
+With count, Terraform tracks resources by position. If you have a list of three subnets and you delete the first one, Terraform shifts the indices of the remaining two, causing unnecessary resource destruction and recreation.
+
+for_each solves this by using stable : keys. If you remove one item from the middle, the other items stay completely untouched because their keys haven't changed.
+
+💻 Example 1: Using a Set of Strings (toset)
+
+If you want to create a few distinct resources (like IAM users, S3 buckets, or subnets) whose names are unique strings, you pass a set to for_each.
+
+variable "environments" {
+  type    = set(string)
+  default = ["dev", "staging", "prod"]
+}
+
+resource "aws_s3_bucket" "app_buckets" {
+  # for_each accepts a set or a map
+  for_each = var.environments
+
+  # each.key and each.value are the same when using a set
+  bucket = "my-company-${each.value}-bucket"
+
+  tags = {
+    Environment = each.value
+  }
+}
+
+terraform refers all thress resource using app_buckets['dev'],app_buckets['staging'],app_buckets['prod']
+
+Example 2: Using a Map (Key-Value Pairs)
+for_each shines brightest when you use a map. A map lets you pass both a key and custom configurations or attributes for each specific resource.
+
+variable "subnet_configs" {
+  type = map(string)
+  default = {
+    us-east-1a = "10.0.1.0/24"
+    us-east-1b = "10.0.2.0/24"
+    us-east-1c = "10.0.3.0/24"
+  }
+}
+
+resource "aws_subnet" "public" {
+  for_each = var.subnet_configs
+
+  vpc_id = aws_vpc.my_vpc.id
+  
+  # each.key gives the map key (e.g., "us-east-1a")
+  availability_zone = each.key 
+  
+  # each.value gives the map value (e.g., "10.0.1.0/24")
+  cidr_block        = each.value 
+
+  tags = {
+    Name = "subnet-${each.key}"
+  }
+}
+
+if you use map or object you can leverage key and value both while creating resource,terraform refers using its key, not value : aws_subnet.public["us-east-1a"] 
+you must reference it by its key:
+
+Syntax: aws_subnet.public["us-east-1a"].id
+
+----------------------------------------------
+
+suppose you have this code
+variable "server_configs" {
+  type = map(string)
+  default = {
+    web = "ami-0567589d25e06723e"
+    api = "ami-0567589d25e06243e"
+    db  = "ami-0567589d25e06563e"
+  }}
+
+resource "aws_instance" "servers" {
+  for_each      = var.server_configs
+  instance_type  = "t2.micro"
+  tags = {
+    Name = "Dev-server"
+  }}
+
+you want to change the instance type to one of the server
+then you can edit the file like this
+
+this is a map(object)
+
+variable "server_configs" {
+  type = map(object({
+    ami_id = string
+    instance_type = string
+  }))
+  default = {
+    web = {
+        ami_id = "ami-0567589d25e06723e"
+        instance_type = "t2.micro"
+    }
+    # here web is key and value is {ami_id = "ami-0567589d25e08474j3" instance_type = "t3.micro"} so it is of map type
+    #  {ami_id = "ami-0567589d25e08474j3" instance_type = "t3.micro"} is of object type
+    app = {
+        ami_id = "ami-0567589d25e08474j3"
+        instance_type = "t3.micro"
+    }
+    db = {
+        ami_id = "ami-0567589d25e0872876hj"
+        instance_type = "t3.nano"
+    }
+  }
+}
+
+resource "aws_instance" "3_tier_servers" {
+  for_each = var.server_configs
+  instance_type = each.value.instance_type #accessing object values by its keys
+  ami = each.value.ami_id #accessing object values by its keys
+  
+  tags = {
+    Name = "${each.key}-server"
+  }
+}
+
+just because you have changed the code structure, terraform will not think it is new resource and old resource is not there and terraform will not destroy old and create new one
+
+Terraform is smart enough to handle this change smoothly without tearing down your servers. Here is exactly what happens when you make that change and run terraform apply:
+
+The Resource Keys Stay the Same
+Because your map keys (web, api, db) remain identical, Terraform knows that aws_instance.servers["web"], aws_instance.servers["api"], and aws_instance.servers["db"] are the exact same resources it already tracks in your state file. It will not delete and recreate them.
+
+2. What Happens to Each Server?
+web and api servers: If their AMI and instance type resolve to the exact same values as before (e.g., still t2.micro), Terraform will report 0 changes for them. They won't even be touched or restarted.
+
+The db server (Instance Type Change): If you changed the db server's instance type (for example, from t2.micro to t3.medium), Terraform will perform an in-place update.
+
+AWS will temporarily stop the db instance, change its instance type behind the scenes, and start it back up.
+
+Your instance ID, attached EBS volumes, and data will remain intact (it is not destroyed and recreated from scratch).

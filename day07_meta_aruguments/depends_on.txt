@@ -1,0 +1,43 @@
+In Terraform, depends_on is a built-in meta-argument used to explicitly define hidden or invisible dependencies between resources.
+
+Normally, Terraform is smart enough to figure out the correct order to create, update, or destroy resources automatically by looking at your code references (called implicit dependencies). For example, if your aws_subnet references aws_vpc.my_vpc.id, Terraform automatically knows the VPC must be created before the subnet.
+
+You use depends_on when a resource needs to be fully created and settled before another resource can start, even though there is no direct attribute reference between them. Common scenarios include:
+
+IAM Policies and Roles: An EC2 instance or Lambda function needs an IAM role attachment to be fully active before it is deployed, otherwise AWS might throw permission errors during initialization.
+
+Scripts or Configs: A resource (like a database or a server bootstrap script) requires an external API call or setup to finish first.
+
+Workarounds for Provider Bugs: Occasionally, an AWS service requires another service to be completely ready behind the scenes, even if the API accepts the request early
+
+Example: IAM Role Policy Attachments before Lambda / EC2 Deployment
+
+resource "aws_iam_role" "lambda_role" {
+  name = "my_lambda_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_policy" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "my_function" {
+  function_name = "my_test_function"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.9"
+  filename      = "lambda_function_payload.zip"
+
+  # Ensures IAM policy is fully bound and propagated before deploying the function
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_policy
+  ]
+}

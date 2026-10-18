@@ -1,0 +1,1 @@
+In Terraform, a meta-argument is a special built-in configuration keyword defined by Terraform itself—not by the cloud provider (like AWS, Azure, or GCP). You can use meta-arguments inside any resource or module block to change how Terraform behaves or manages that resource.
