@@ -1,0 +1,11 @@
+In Terraform, lifecycle rules are meta-arguments used inside a resource block to control how Terraform manages resource creation, updates, and destruction. By default, Terraform follows a standard create-then-destroy or update-in-place pattern. Lifecycle meta-arguments let you override this behavior.
+
+meta arguments means these are explicitly created and maintained by terraform, not aws provider
+like many normal arguments such as instance_type, ami_id, vpc_id many manyy aruguments and values format are managed by aws provider in aws terraform registry
+
+Here are the four main lifecycle options available:
+1. create_before_destroy
+2. prevent_destroy
+3. ignore_changes
+4. replace_triggered_by
+5. pre and post conditions

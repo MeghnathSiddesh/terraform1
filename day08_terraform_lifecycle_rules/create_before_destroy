@@ -1,0 +1,26 @@
+Default Terraform Behavior: When a property changes that requires recreation (like updating an AMI ID on an EC2 instance), Terraform destroys the old resource first and then creates the new one. This results in downtime.
+
+operations like update-in-place operation such as changing instance type, will not require destroying instance so create_before_destroy will not apply for This
+
+With create_before_destroy = true: Terraform reverses the sequence. It creates the new resource first, waits for it to become ready, and only then destroys the old resource.
+
+create_before_destroy
+
+
+What it does: Changes the order of operations during an update that forces replacement. Instead of destroying the old resource first and then creating the new one, Terraform creates the new resource first and then destroys the old one.
+
+When a property changes that requires recreation (like updating an AMI ID on an EC2 instance), Terraform destroys the old resource first and then creates the new one. This results in downtime.
+When to use it: Useful for resources with strict uptime requirements (like load balancers or auto-scaling groups) to prevent downtime during updates.
+
+resource "aws_instance" "web" {
+  ami           = "ami-123456"
+  instance_type = "t3.micro"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+here if you change the AMI, subnet etc the 
+
+Important: Terraform creating the new resource first does not guarantee zero downtime. The new instance may not be ready, healthy, or receiving traffic before the old instance is removed.
