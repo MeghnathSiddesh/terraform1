@@ -1,0 +1,15 @@
+resource-level for_each accepts only maps or sets of strings
+
+but inside a dynamic block, for_each accepts "all data types".
+
+1. Why Resource-Level for_each Restricts You
+When you use for_each on a resource block (e.g., resource "aws_instance" "web" { for_each = ... }), Terraform needs to track each created resource instance independently in your state file.
+
+To do this safely, it requires keys that are unique and static.
+
+A Map provides explicit keys (each.key and each.value).
+
+A Set of strings provides unique values that double as their own stable keys.
+
+A standard List is indexed numerically (0, 1, 2). If you insert an item at the beginning of a list, all subsequent indices shift, which would cause Terraform to unnecessarily destroy and recreate downstream resources. Because of this risk, resource-level for_each blocks reject standard lists.
+

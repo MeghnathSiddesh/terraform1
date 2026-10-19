@@ -1,0 +1,69 @@
+Splat expressions in Terraform allow you to extract specific attributes from a list or set of objects without having to write out a full for loop expression. They are a shorthand way to pull a common piece of data out of every item in a collection.
+
+The name "splat" comes from the asterisk symbol (*), which is often referred to in programming as a wildcard or "splat."
+
+Imagine you create multiple AWS subnets using count, and you want to output all of their IDs as a list.
+
+Without a splat expression, you would have to write a for loop:
+
+# Using a 'for' expression
+output "subnet_ids" {
+  value = [for s in aws_subnet.example : s.id]
+}
+
+With a splat expression, you can achieve the exact same result much more concisely using *:
+
+# Using a splat expression
+output "subnet_ids" {
+  value = aws_subnet.example[*].id
+}
+
+
+Syntax
+A splat expression consists of a collection, followed by [*], and then the attribute you want to pull out:
+
+collection[*].attribute_name
+
+this will pull the corresponding all values of an attribute
+it will give the result in list format
+here attribute_name is optional, if not given then it will print all data of that collection
+ex:
+
+variable "list1" {
+  type = list(number)
+  default = [ 1,2,3,4,5 ]
+}
+
+output "outpute" {
+  value = var.list1[*]
+}
+----------------------
+
+
+variable "subnets" {
+  type = list(object({
+    name = string
+    cidr = string
+  }))
+  default = [
+    { name = "web", cidr = "10.0.1.0/24" },
+    { name = "db",  cidr = "10.0.2.0/24" }
+  ]
+}
+
+# Extract just the CIDR blocks into a simple list of strings
+output "cidr_blocks" {
+  value = var.subnets[*].cidr
+  # Result: ["10.0.1.0/24", "10.0.2.0/24"]
+}
+---------
+resource "aws_instance" "app" {
+  count = 3
+  ami   = "ami-12345678"
+}
+
+locals {
+  # Using a splat expression inside a local value
+  all_instance_ids = aws_instance.app[*].id
+}
+----------

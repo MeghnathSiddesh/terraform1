@@ -1,0 +1,228 @@
+Dynamic blocks in Terraform allow you to dynamically generate repeating nested blocks within a resource, data source, or provider configuration.
+
+Normally, if a resource requires multiple nested configuration blocks (like security group ingress rules, IAM policy statements, or subnet settings), you have to hardcode them. Dynamic blocks let you loop over a list or map to create these nested blocks automatically.
+
+Imagine defining an AWS security group with multiple ingress ports. Without dynamic blocks, you repeat yourself:
+
+resource "aws_security_group" "example" {
+  name = "example-sg"
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+If you want to add ports dynamically based on a variable, you can't easily do it with standard arguments—that's where dynamic blocks come in.
+
+-------------------
+
+Syntax
+A dynamic block uses the dynamic keyword followed by the name of the nested block you want to generate:
+
+dynamic "block_name" {
+  for_each = var.collection_to_loop_over
+
+  content {
+    # Reference the current item using block_name.value
+    # Reference the iterator name if explicitly defined
+    attribute_name = block_name.value.some_property
+  }
+}
+
+Use .value: Access properties of the current item using <block_name>.value.property.
+
+block_name.key : represents one or many keys of the current item(in the current iteration) in the collection.
+to access particular key in the current item of the collection use : block_name.key
+
+block_name.value : represents one or many values of the current item(in the current iteration) in the collection.
+to access particular value in the current item of the collection use : block_name.value
+use : block_name.value.key_name , if the variable is map(object),because it is bit nested
+
+
+content: Defines what goes inside the generated nested block.
+you will define this dynamic block inside the resource, data or provider section to iterate over
+---------------------------------------------
+
+example :
+
+Let's rewrite the security group example using a variable list of ports and a dynamic block.
+
+1. Define the Variable
+
+variable "ingress_ports" {
+  type = list(object({
+    description = string
+    port        = number
+  }))
+  default = [
+    { description = "HTTP", port = 80 },
+    { description = "HTTPS", port = 443 },
+    { description = "SSH", port = 22 }
+  ]
+}
+
+2. Use the Dynamic Block
+
+resource "aws_security_group" "dynamic_sg" {
+  name = "my-dynamic-sg"
+
+  dynamic "ingress" {
+    for_each = var.ingress_ports
+
+    content {
+      description = ingress.value.description
+      from_port   = ingress.value.port
+      to_port     = ingress.value.port
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+}
+
+--------------------------------------------
+
+ Using a list(object) (Ordered Configurations)
+
+Use a list of objects when you need to pass multiple distinct attributes per block, and the order matters or you don't care about giving each item a unique string key.
+
+
+variable "subnets" {
+  type = map(object({
+    cidr_block        = string
+    availability_zone = string
+    public_ip         = bool
+  }))
+  default = {
+    "web-subnet" = {
+      cidr_block        = "10.0.1.0/24"
+      availability_zone = "us-east-1a"
+      public_ip         = true
+    }
+    "db-subnet" = {
+      cidr_block        = "10.0.2.0/24"
+      availability_zone = "us-east-1b"
+      public_ip         = false
+    }
+  }
+}
+
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+}
+
+# Note: While aws_subnet usually uses standard for_each on the resource, 
+# this demonstrates how a dynamic block processes a map(object)
+resource "aws_network_acl" "main" {
+  vpc_id = aws_vpc.main.id
+
+  dynamic "ingress" {
+    for_each = var.subnets
+    content {
+      protocol   = "tcp"
+      rule_no    = 100
+      action     = "allow"
+      cidr_block = ingress.value.cidr_block # Accesses the object property
+      from_port  = 0
+      to_port    = 0
+    }
+  }
+}
+
+
+#first iteration
+ingress.key   =>web-subnet
+ingress.value  =>{
+      cidr_block        = "10.0.1.0/24"
+      availability_zone = "us-east-1a"
+      public_ip         = true
+    }
+ingress.value.cidr_block =>"10.0.1.0/24"
+
+#second iteration
+ingress.key   =>db-subnet
+ingress.value  =>{
+      cidr_block        = "10.0.2.0/24"
+      availability_zone = "us-east-1b"
+      public_ip         = false
+    }
+ingress.value.cidr_block =>"10.0.2.0/24"
+
+-------------------------------
+
+
+Using a list(object) (Ordered Configurations)
+
+Use a list of objects when you need to pass multiple distinct attributes per block, and the order matters or you don't care about giving each item a unique string key.
+
+variable "ingress_rules" {
+  type = list(object({
+    port        = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    { port = 80,  protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },
+    { port = 443, protocol = "tcp", cidr_blocks = ["10.0.0.0/16"] }
+  ]
+}
+
+resource "aws_security_group" "web" {
+  name        = "web-traffic"
+  description = "Allow web traffic"
+
+  dynamic "ingress" {
+    for_each = var.ingress_rules
+    content {
+      from_port   = ingress.value.port
+      to_port     = ingress.value.port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
+}
+
+----------------------------------------------
+
+
+Using a map(string) (Simple Key-Value Pair)
+
+Use this when you have a flat list of items where each item only needs a simple key and a single value (like tags, environment variables, or metadata).
+
+variable "custom_headers" {
+  type = map(string)
+  default = {
+    "X-XSS-Protection"        = "1; mode=block"
+    "Strict-Transport-Security" = "max-age=63072000; includeSubDomains"
+  }
+}
+
+resource "aws_cloudfront_response_headers_policy" "example" {
+  name = "security-headers-policy"
+
+  # CloudFront requires a custom_headers block for each individual header
+  dynamic "custom_headers" {
+    for_each = var.custom_headers
+    content {
+      header   = custom_headers.key    # E.g., "X-XSS-Protection"
+      value    = custom_headers.value  # E.g., "1; mode=block"
+      override = true
+    }
+  }
+}
+
+----------------
+
+dynamic block wont create new resource
+it will just repeats nested configuration blocks inside a single parent resource., so it is just used to configure the same resource, 
+
+if the resource configuration is very big and repetative, dynamic block helps in DRY principle, by not repeating code of same block with diff values; by providing different values to same code block

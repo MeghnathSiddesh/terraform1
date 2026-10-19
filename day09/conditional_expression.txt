@@ -1,0 +1,49 @@
+Conditional expressions in Terraform allow you to dynamically assign a value to a variable or resource argument based on a true/false condition. They act just like an inline if/else statement.
+
+Syntax
+The syntax uses the ternary operator, which is common in many programming languages:
+
+condition ? true_val : false_val
+
+condition: An expression that evaluates to a boolean (true or false).
+
+true_val: The value returned if the condition is true.
+
+false_val: The value returned if the condition is false.
+
+Important Rule: Both true_val and false_val must be of the same data type (e.g., both strings, both numbers, or both lists), otherwise Terraform will throw a type mismatch error.
+
+1. Environment-Specific Sizing (T-Shirt Sizing)
+You often want smaller resource instances in non-production environments and larger ones in production.
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-12345678"
+  instance_type = var.environment == "prod" ? "t3.large" : "t3.micro"
+}
+
+How it works: If var.environment equals "prod", it assigns "t3.large". Otherwise, it falls back to "t3.micro".
+
+Combining Multiple Conditions
+You can chain or combine conditions in condition section using logical operators like && (AND) and || (OR).
+
+variable "environment" {
+  type    = string
+  default = "staging"
+}
+
+variable "high_traffic" {
+  type    = bool
+  default = false
+}
+
+locals {
+  # Use t3.medium if it's production OR expected to have high traffic; otherwise t3.micro
+  instance_size = (var.environment == "prod" || var.high_traffic) ? "t3.medium" : "t3.micro"
+}
+
+

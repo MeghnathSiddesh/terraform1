@@ -69,7 +69,7 @@ The condition checks the instance's public_ip attribute.
 
 
 condition     = self.public_ip != "" 
-this condition becomes true only when resource(self) gets public ip
+this condition becomes true only when resource(self) not gets public ip
 
 Use a postcondition with a data source
 
